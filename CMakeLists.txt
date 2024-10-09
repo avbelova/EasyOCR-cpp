@@ -1,26 +1,24 @@
-cmake_minimum_required(VERSION 3.20 FATAL_ERROR)
-project(openinoTest)
+cmake_minimum_required(VERSION 3.14)
+project(openvinoTest)
 
+# Set the C++ standard
 set(CMAKE_CXX_STANDARD 20)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_STANDARD_REQUIRED True)
 
-find_package(OpenVINO REQUIRED)
 
-# Find OPENCV automatically if built from dockerfile
-if (DEFINED ENV{build_from_docker_file})
-    find_package(OpenCV 4 REQUIRED)
-    find_package(Threads REQUIRED)
-# Else force the path to opencv here if executed on Windows
-else ()
-    find_package(OpenCV REQUIRED PATHS C:/Users/sasso/Downloads/new/opencv/build )
-endif()
+# Find OpenVINO package (use the latest version's simplified package find)
+find_package(OpenVINO REQUIRED COMPONENTS Runtime)  # Load only the inference runtime component
+set(OpenCV_DIR "C:/OpenCV/opencv/build")
+find_package(OpenCV REQUIRED)
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
+# Include OpenVINO and OpenCV directories
+include_directories(${CMAKE_SOURCE_DIR}/include ${OpenVINO_INCLUDE_DIRS} ${OpenCV_INCLUDE_DIRS})
+
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${TORCH_CXX_FLAGS}")
 # Get all character text files  from the 'lang' directory
 file(GLOB LANG_FILES "lang/*")
 
 file(GLOB MODELS "models/*")
-
 
 # Set the source file path
 set(SOURCE_FILE_PATH "test.jpg")
@@ -43,18 +41,16 @@ foreach(FILE_PATH ${MODELS})
     file(COPY ${FILE_PATH} DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
 endforeach()
 
-add_executable(openvinoTest OpenvinoExample.cpp 
-			 src/OpenvinoModel.cpp
-			 src/CRAFT.cpp
-			 src/CRNN.cpp)
-target_include_directories(openvinoTest PUBLIC "include/")
-target_link_libraries(openvinoTest ${OpenCV_LIBS} ${MKL} PRIVATE openvino::runtime)
-set_property(TARGET openvinoTest PROPERTY CXX_STANDARD 17)
+# Add the executable for your application
+add_executable(${PROJECT_NAME} OpenvinoExample.cpp
+                               src/OpenvinoModel.cpp
+                               src/CRAFT.cpp
+                               src/CRNN.cpp)
 
-if (MSVC)
-  set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT openvinoTest)
-  add_custom_command(TARGET openvinoTest
-                     POST_BUILD
-                     COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                     $<TARGET_FILE_DIR:openvinoTest>)
-endif (MSVC)
+# Link OpenVINO and OpenCV libraries to your target
+target_link_libraries(${PROJECT_NAME} openvino::runtime ${OpenCV_LIBS})
+
+# Print diagnostic information (Optional, useful for troubleshooting)
+message(STATUS "OpenVINO include dirs: ${OpenVINO_INCLUDE_DIRS}")
+message(STATUS "OpenCV include dirs: ${OpenCV_INCLUDE_DIRS}")
+message(STATUS "OpenCV libraries: ${OpenCV_LIBS}")
