@@ -5,6 +5,8 @@ project(openvinoTest)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 
+# Make openvinoTest a startup project in MSVS
+set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT openvinoTest)
 
 # Find OpenVINO package (use the latest version's simplified package find)
 find_package(OpenVINO REQUIRED COMPONENTS Runtime)  # Load only the inference runtime component
