@@ -10,7 +10,7 @@ int main()
     CRNNModel recognition;
 
     std::string det = "CRAFT-detector.xml";
-    std::string rec = "1_recognition_model.xml";
+    std::string rec = "recognition_model.xml";
     std::string filePath = "test.jpg";
     std::string device = "CPU";
 
