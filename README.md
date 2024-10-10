@@ -15,8 +15,19 @@ Use OpenCV Windows installer and unzip (v4.6) - > [OpenCV libs](https://opencv.o
 
 Make sure to change the location in the  [Makefile](https://github.com/avbelova/EasyOCR-cpp/blob/afc2090b6d32dda4461d3a361abb7eaa80116ff9/CMakeLists.txt#L11) for OpenCV to point to your OpenCV build dir 
 
-Create a build directory within the repo, cd to it and run
+Set up OpenVINO environment:
 ```
+C:\Program Files (x86)\Intel\openvino_2024.4.0\setupvars.bat 
+```
+Set up OpenCV environment 
+```
+C:\OpenCV\opencv\build\setup_vars_opencv4.cmd
+```
+Create a build directory within the repo, cd to it and run cmake
+
+```
+mkdir build
+cd build
 cmake  ..
 ```
 
@@ -27,16 +38,7 @@ This will generate a solution within the build folder you can open up in Visual 
 
 Configure your input image  [here](https://github.com/avbelova/EasyOCR-cpp/blob/afc2090b6d32dda4461d3a361abb7eaa80116ff9/OpenvinoExample.cpp#L14). Currently the test program is using the test.jpg which comes in the repo.
 
-Set up OpenVINO environment:
-```
-C:\Program Files (x86)\Intel\openvino_2024.4.0\setupvars.bat 
-```
-Set up OpenCV environment 
-```
-C:\OpenCV\opencv\build\setup_vars_opencv4.cmd
-```
-
-Launch from command-line, or within Visual Studio after building.
+Launch from command-line, or within Visual Studio after building. **Don't forget to source environment variables for both OpenVINO and OpenCV as described above**
 
 **Since its designed to be used in a C++ program, text is not being written to disk at the moment** An output image will be generated in the main repo dir containing an annotated version of the input image with detection bounding boxes
 
