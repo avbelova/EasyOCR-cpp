@@ -17,7 +17,7 @@ bool OpenVINOModel::loadModel(const std::string& modelPath, const std::string& d
 		ov::Core core;
 		std::shared_ptr<ov::Model> model = core.read_model(modelPath.c_str());
 		ov::preprocess::PrePostProcessor ppp(model);
-		ppp.input().preprocess().convert_layout({ 0, 3, 1, 2 });
+		ppp.input(0).preprocess().convert_layout({ 0, 3, 1, 2 });
 		model = ppp.build();
 		compiled_model = core.compile_model(model, device);
 		success = true;
@@ -35,9 +35,9 @@ bool OpenVINOModel::loadModel(const std::string& modelPath, const std::string& d
 ov::Tensor OpenVINOModel::predict(const ov::Tensor& input)
 {
 	ov::InferRequest ireq = this->compiled_model.create_infer_request();
-	ireq.set_input_tensor(input);
+	ireq.set_input_tensor(0, input);
 	ireq.infer();
-	const ov::Tensor& output_tensor = ireq.get_output_tensor();
+	const ov::Tensor& output_tensor = ireq.get_output_tensor(0);
 	return output_tensor;
 	
 }
