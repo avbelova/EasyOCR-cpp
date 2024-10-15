@@ -36,10 +36,33 @@ This will generate a solution within the build folder you can open up in Visual 
 
 ### Running
 
-Configure your input image  [here](https://github.com/avbelova/EasyOCR-cpp/blob/afc2090b6d32dda4461d3a361abb7eaa80116ff9/OpenvinoExample.cpp#L14). Currently the test program is using the test.jpg which comes in the repo.
+Configure your recognition model, input image and inference device [here](https://github.com/avbelova/EasyOCR-cpp/blob/0754743a0128266dc624964d01d45e2147b290fe/OpenvinoExample.cpp#L13C3-L15C32). Configure a characters list for your language [here](https://github.com/avbelova/EasyOCR-cpp/blob/0754743a0128266dc624964d01d45e2147b290fe/src/CRNN.cpp#L10) By default the openvinoTest program is using the english recognition model, test.jpg as an input image which comes in the repo and running inference on CPU. 
 
 Launch from command-line, or within Visual Studio after building. **Don't forget to source environment variables for both OpenVINO and OpenCV as described above**
 
-**Since its designed to be used in a C++ program, text is not being written to disk at the moment** An output image will be generated in the main repo dir containing an annotated version of the input image with detection bounding boxes
+### Adding more languages support
 
+This repo contains a recognition model for English [recognition_model.xml](https://github.com/avbelova/EasyOCR-cpp/blob/openvino-integration/models/recognition_model.xml) and for the most popular european languages based on latin symbols (German, French, Inalian, Spanish, etc.) [recognition_model_latin.xml](https://github.com/avbelova/EasyOCR-cpp/blob/openvino-integration/models/recognition_model_latin.xml). Please note that for the inference with OpenVINO both <model>.xml and <model>.bin files are required, they should have the same name and be placed in the same folder, but in a code you can specify only path to the .xml file. For both languages there are corresponding language characters files: [english_g2_characters.txt](https://github.com/avbelova/EasyOCR-cpp/blob/openvino-integration/lang/english_g2_characters.txt) and [latin_char.txt](https://github.com/avbelova/EasyOCR-cpp/blob/openvino-integration/lang/latin_char.txt).
+*** If you need models for more languages, you can get them already in OpenVINO format following these steps:*** 
+1. Create and activate python virtual environment:
+   ```
+   python -m venv env
+   env\Scripts\activate
+   ```
+2. Install a patched Python EasyOCR version:
+   ```
+   pip install git+https://github.com/avbelova/EasyOCR.git@model-convert-and-save
+   ```
+3. Run EasyOCR with the needed language as usuall in Python. For example the following code gets a Chineese recognition model:
+   ```
+   import cv2
+   import easyocr
+
+   img=cv2.imread("chinese.jpg")
+   reader = easyocr.Reader(['ch_sim'], gpu="ov_cpu")
+   result = reader.readtext(img, detail = 0)
+   print(result)
+   ```
+4. Find a recogntion model in OpenVINO format in the directory from where you run EasyOCR in the previous step.
+5. Don't forget to obtain a character list for your model.
 
