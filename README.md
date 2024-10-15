@@ -43,7 +43,7 @@ Launch from command-line, or within Visual Studio after building. **Don't forget
 ### Adding more languages support
 
 This repo contains a recognition model for English [recognition_model.xml](https://github.com/avbelova/EasyOCR-cpp/blob/openvino-integration/models/recognition_model.xml) and for the most popular european languages based on latin symbols (German, French, Inalian, Spanish, etc.) [recognition_model_latin.xml](https://github.com/avbelova/EasyOCR-cpp/blob/openvino-integration/models/recognition_model_latin.xml). Please note that for the inference with OpenVINO both <model>.xml and <model>.bin files are required, they should have the same name and be placed in the same folder, but in a code you can specify only path to the .xml file. For both languages there are corresponding language characters files: [english_g2_characters.txt](https://github.com/avbelova/EasyOCR-cpp/blob/openvino-integration/lang/english_g2_characters.txt) and [latin_char.txt](https://github.com/avbelova/EasyOCR-cpp/blob/openvino-integration/lang/latin_char.txt).
-*** If you need models for more languages, you can get them already in OpenVINO format following these steps:*** 
+***If you need models for more languages, you can get them already in OpenVINO format following these steps:*** 
 1. Create and activate python virtual environment:
    ```
    python -m venv env
