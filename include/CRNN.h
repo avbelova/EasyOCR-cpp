@@ -1,9 +1,7 @@
 #ifndef CRNN_H
 #define CRNN_H
-#include <torch/script.h>
-#include <torch/torch.h>
 #include "string"
-#include "TorchModel.h"
+#include "OpenvinoModel.h"
 #include "CRAFT.h"
 #include <opencv2/opencv.hpp>
 struct TextResult
@@ -13,17 +11,19 @@ struct TextResult
 	BoundingBox coords;
 };
 
-class CRNNModel : public TorchModel {
+class CRNNModel : public OpenVINOModel {
 
 public:
 
 	CRNNModel();
-	std::vector<TextResult> recognize(std::vector<BoundingBox>& dets, cv::Mat& img, int& maxWidth);
-	torch::Tensor preProcess(cv::Mat& det);
-	torch::Tensor normalizePad(cv::Mat& processed, int minWidth);
-	std::string greedyDecode(torch::Tensor& input, int size);
+	std::vector<TextResult> recognize(std::vector<BoundingBox>& dets, cv::Mat& img);
+	ov::Tensor preProcess(cv::Mat& det);
+	ov::Tensor normalize(cv::Mat& processed);
+	std::string greedyDecode(std::vector<int>& encoded);
+	ov::Tensor softmax(ov::Tensor& input, int dim);
 	//stores the last computed ratio (resize/rescale) from input image. 
 	float ratio;
 	std::vector<char> characters;
+	void print_tensor(ov::Tensor& tensor);
 };
 #endif

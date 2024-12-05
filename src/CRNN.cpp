@@ -2,15 +2,15 @@
 #include <iostream>
 #include <fstream>
 #include <tuple>
-using namespace torch::indexing;
 
 
-CRNNModel::CRNNModel() : TorchModel()
+CRNNModel::CRNNModel() : OpenVINOModel()
 {
 	// eventually read from a config!
 	std::string filename = "english_g2_characters.txt";
 	std::ifstream file(filename);
-	if (!file.is_open()) {
+	if (!file.is_open()) 
+	{
 		std::cerr << "Error: Unable to open file " << filename << std::endl;
 	}
 
@@ -32,45 +32,36 @@ float resizeComputeRatio(cv::Mat& img, int modelHeight)
 	if (ratio < 1.0)
 	{
 		ratio = 1.0 / ratio;
-		cv::resize(img, img, cv::Size(modelHeight, int(modelHeight * ratio) ));
+		cv::resize(img, img, cv::Size(modelHeight, int(modelHeight * ratio)));
 	}
 	else
 	{
-		
-		cv::resize(img, img, cv::Size(int(modelHeight * ratio),modelHeight ));
-		
+
+		cv::resize(img, img, cv::Size(int(modelHeight * ratio), modelHeight));
+
 	}
-	
+
 	return ratio;
 }
 
-// Greedy decoding
-std::string CRNNModel::greedyDecode(torch::Tensor& input, int size)
+
+std::string CRNNModel::greedyDecode(std::vector<int>& encoded)
 {
-	int length = size;
-	std::vector<int> ignoreList = { 0 };
-	torch::Tensor t = input.slice(0, 0, input.size(0));
-	auto a = torch::cat({ torch::tensor({true}), ~(t.slice(0,0, -1) == t.slice(0,1).flatten()) }, 0);
-	auto b = ~(t.unsqueeze(1) == torch::tensor(ignoreList).unsqueeze(0)).all(1);
-	auto c = a & b;
-	auto indices = c.nonzero();
-	auto result = t.index_select(0, indices.flatten());
-	std::vector<char> extracted;
-	for (int i = 0; i < result.size(0); i++) {
-		int index = result[i].item<int>();
-		if (index >= 0 && index < this->characters.size()) {
-			extracted.push_back(this->characters[index]);
+	std::string text="";
+	for (int i = 0; i < encoded.size(); i++)
+	{
+		if (encoded[i]!= 0 && encoded[i] != encoded[i + 1])
+		{
+			text.push_back(this->characters[encoded[i]]);
+
 		}
 	}
-	// Join the extracted characters into a single string
-	std::string text(extracted.begin(), extracted.end());
 	return text;
 }
 
-//still need to implement beam search
 
 
-torch::Tensor CRNNModel::preProcess(cv::Mat& det) 
+ov::Tensor CRNNModel::preProcess(cv::Mat& det)
 {
 	// Default model height used in easyOCR
 	float ratio = resizeComputeRatio(det, 64);
@@ -80,15 +71,14 @@ torch::Tensor CRNNModel::preProcess(cv::Mat& det)
 	//det.convertTo(det, -1, alpha, beta);
 
 	//at least 128 in length
-	auto processedTensor = this->normalizePad(det, 256);
+	auto processedTensor = this->normalize(det);
 	return processedTensor;
 }
 
-std::vector<TextResult> CRNNModel::recognize(std::vector<BoundingBox>& dets, cv::Mat& img, int &maxWidth)
+std::vector<TextResult> CRNNModel::recognize(std::vector<BoundingBox>& dets, cv::Mat& img)
 {
 	// returns max width for padding and resize
-	std::vector<torch::Tensor> processed;
-	float maxRatio = 0;
+	std::vector<ov::Tensor> processed;
 	std::vector<TextResult> results;
 	for (auto& x : dets)
 	{
@@ -96,48 +86,105 @@ std::vector<TextResult> CRNNModel::recognize(std::vector<BoundingBox>& dets, cv:
 		cv::Mat det = img(cv::Rect(x.topLeft.x, x.topLeft.y, (x.bottomRight.x - x.topLeft.x), (x.bottomRight.y - x.topLeft.y))).clone();
 		if (det.rows < 5)
 			continue;
-		
-		torch::Tensor processedTensor = this->preProcess(det);
-		std::vector<torch::Tensor>  input{ processedTensor.unsqueeze(0) };
 
-		auto ss = std::chrono::high_resolution_clock::now();
-		torch::Tensor output = this->predict(input);
-		auto ee = std::chrono::high_resolution_clock::now();
+		ov::Tensor processedTensor = this->preProcess(det);
+		//auto ss = std::chrono::high_resolution_clock::now();
+		ov::Tensor output = this->predict(processedTensor);
+		/*auto ee = std::chrono::high_resolution_clock::now();
 		auto difff = ee - ss;
+		*/
 		//std::cout << "TOTAL INFERENCE RECORNGITON TIME " << std::chrono::duration <double, std::milli>(difff).count() << " ms" << std::endl;
-		
+
 		//post process and decode
-		auto confidence = torch::softmax(output, 2);
-		auto norm = confidence.sum(2);
-		auto prob = (confidence / norm.unsqueeze(2));
-		torch::Tensor predIndex;
-		std::tie(std::ignore, predIndex) = prob.max(2);
-		predIndex = predIndex.view({ -1 });
-		std::string text = this->greedyDecode(predIndex, predIndex.size(0));
+		auto confidence = this->softmax(output, 2);
+		float* confidence_data = confidence.data<float>();
+
+		ov::Shape shape = confidence.get_shape();
+		
+		std::vector<float> maxes;
+		std::vector<int> indices;
+		int counter = 0;
+		for (int i=0; i< confidence.get_shape()[1]; i++)
+		{
+			float max = confidence_data[counter];
+			int idx = 0;
+			for (int j = 0; j < confidence.get_shape()[2]; j++)
+			{
+				if (confidence_data[counter] > max)
+				{
+					max = confidence_data[counter];
+					idx = j;
+				}
+				counter++;
+			}
+			maxes.push_back(max);
+			indices.push_back(idx);
+		}
+
+		std::string text = this->greedyDecode(indices);
 		res.text = text;
-		res.confidence = *prob.data_ptr<float>();
+        res.confidence = *confidence.data<float>();
 		res.coords = x;
 		results.push_back(res);
-		processed.push_back(processedTensor);
 	}
-	// 64 was model height used in easyOCR
-	float maxW = float(ratio * 64);
 	return results;
 }
 
-torch::Tensor CRNNModel::normalizePad(cv::Mat& processed, int maxWidth) 
+ov::Tensor CRNNModel::normalize(cv::Mat& processed)
 {
-	std::vector<torch::Tensor> input;
-	auto converted = this->convertToTensor(processed.clone(), true, false).squeeze(0);
-	torch::Tensor pad = torch::zeros({ 1,converted.size(1),maxWidth});
-	converted = (converted - (.5  ) / (.5  ));
-	if (maxWidth > converted.size(2)) 
+	auto converted = this->convertToTensor(processed.clone(), true, false); 
+	float* converted_data = converted.data<float>();
+	for (int i = 0; i < converted.get_size(); i++)
 	{
-		pad.narrow(2, 0, converted.size(2)).copy_(converted.detach());
-		auto padded = this->convertToMat(converted, true, true, false, false);
-		//cv::imwrite("Padded.jpg", padded);
-		converted = pad.clone();	
+		converted_data[i] = (converted_data[i] - (.5) / (.5));
 	}
-	int width = converted.size(2);
+
 	return converted;
+}
+ov::Tensor CRNNModel::softmax(ov::Tensor& input, int dim) 
+{
+	ov::Shape shape = input.get_shape();
+	float* input_data = input.data<float>();
+
+	ov::Tensor output(input.get_element_type(), shape);
+	float* output_data = output.data<float>();
+
+	size_t batch_size = shape[0]; 
+	size_t num_elements_per_axis = shape[dim]; 
+
+	for (size_t i = 0; i < input.get_size(); ++i) {
+		output_data[i] = std::exp(input_data[i]);
+	}
+
+	for (size_t b = 0; b < batch_size; ++b) {
+		for (size_t j = 0; j < num_elements_per_axis; ++j) {
+			float sum_exp = 0.0f;
+			for (size_t k = 0; k < num_elements_per_axis; ++k) {
+				sum_exp += output_data[b * num_elements_per_axis + k];
+			}
+
+			for (size_t k = 0; k < num_elements_per_axis; ++k) {
+				output_data[b * num_elements_per_axis + k] /= sum_exp;
+			}
+		}
+	}
+
+	return output;
+}
+void CRNNModel::print_tensor(ov::Tensor& tensor)
+{
+	float* data_ptr = tensor.data<float>();
+	int index = 0;
+	for (int i = 0; i < tensor.get_shape()[1]; i++) 
+	{
+		for (int j = 0; j < tensor.get_shape()[2]; j++) 
+		{
+			std::cout << data_ptr[index] << " ";
+			index++;
+		}
+		std::cout << std::endl;
+	}
+
+
+
 }

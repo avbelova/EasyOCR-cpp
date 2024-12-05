@@ -1,9 +1,8 @@
+#pragma once
 #ifndef CRAFT_H
 #define CRAFT_H
-#include <torch/script.h>
-#include <torch/torch.h>
 #include "string"
-#include "TorchModel.h"
+#include "OpenVINOModel.h"
 #include <opencv2/opencv.hpp>
 
 struct HeatMapRatio {
@@ -37,15 +36,15 @@ struct pointSorter {
 	}
 };
 
-class CraftModel: public TorchModel{
+class CraftModel : public OpenVINOModel {
 
 public:
 	HeatMapRatio resizeAspect(cv::Mat& img);
-	cv::Mat normalize(const cv::Mat & img);
-	std::vector<BoundingBox> getBoundingBoxes(const torch::Tensor &input, const torch::Tensor& output, float textThresh = .7, float linkThresh = .4, float lowText = .4);
-	torch::Tensor preProcess(const cv::Mat & matInput);
+	cv::Mat normalize(const cv::Mat& img);
+	std::vector<BoundingBox> getBoundingBoxes(const ov::Tensor& input, const ov::Tensor& output, float textThresh = .7, float linkThresh = .4, float lowText = .4);
+	ov::Tensor preProcess(const cv::Mat& matInput);
 	std::vector<BoundingBox> mergeBoundingBoxes(std::vector<BoundingBox>& dets, float distanceThresh, int height, int width);
-	std::vector<BoundingBox> runDetector(torch::Tensor& input, bool merge);
+	std::vector<BoundingBox> runDetector(ov::Tensor& input, bool merge);
 	// stores the last computed ratio (resize/rescale) from input image. 
 	float ratio;
 };

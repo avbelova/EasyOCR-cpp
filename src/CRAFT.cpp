@@ -1,8 +1,9 @@
 #include "CRAFT.h"
 #include <algorithm>
+#include <fstream>
+#include <sstream>
 
-using namespace torch::indexing;
-HeatMapRatio CraftModel::resizeAspect(cv::Mat&  img)
+HeatMapRatio CraftModel::resizeAspect(cv::Mat& img)
 {
 	HeatMapRatio output;
 	try {
@@ -51,7 +52,7 @@ HeatMapRatio CraftModel::resizeAspect(cv::Mat&  img)
 	return output;
 }
 std::vector<BoundingBox> CraftModel::mergeBoundingBoxes(std::vector<BoundingBox>& dets, float distanceThresh, int height, int width)
-{	
+{
 	// represents how much we change the top left Y
 	std::sort(dets.begin(), dets.end(), boxSorter());
 	bool merge = NULL;
@@ -70,7 +71,7 @@ std::vector<BoundingBox> CraftModel::mergeBoundingBoxes(std::vector<BoundingBox>
 			float ratio = x / xPrime;
 			bool isNegative = false;
 			if (x - xPrime < 0) isNegative = true;
-			float w= dets[i].bottomRight.x - dets[i].topLeft.x;
+			float w = dets[i].bottomRight.x - dets[i].topLeft.x;
 			float h = dets[i].bottomRight.y - dets[i].topLeft.y;
 			if (width > 5 * height)
 			{
@@ -79,7 +80,7 @@ std::vector<BoundingBox> CraftModel::mergeBoundingBoxes(std::vector<BoundingBox>
 				continue;
 			}
 			//merge box, store point
-			if (ratio > distanceThresh && ratio < 1.4 && std::abs(dets[i].bottomRight.y - dets[i+1].bottomRight.y) < 20)
+			if (ratio > distanceThresh && ratio < 1.4 && std::abs(dets[i].bottomRight.y - dets[i + 1].bottomRight.y) < 20)
 			{
 				newBottomRight = dets[i + 1].bottomRight;
 				if (dets[i + 1].topLeft.y < dets[i].topLeft.y)
@@ -128,7 +129,7 @@ std::vector<BoundingBox> CraftModel::mergeBoundingBoxes(std::vector<BoundingBox>
 					newBox.topLeft.x = 0;
 				}
 				newBox.topLeft.x = int(newBox.topLeft.x);
-				newBox.topLeft.y =  int(newBox.topLeft.y);
+				newBox.topLeft.y = int(newBox.topLeft.y);
 
 				newBox.bottomRight = newBottomRight;
 				newBox.bottomRight.y += maxY;
@@ -138,15 +139,15 @@ std::vector<BoundingBox> CraftModel::mergeBoundingBoxes(std::vector<BoundingBox>
 
 				if (newBox.bottomRight.y > height)
 				{
-					newBox.bottomRight.y = height-1;
+					newBox.bottomRight.y = height - 1;
 				}
 
 				if (newBox.bottomRight.x > width)
 				{
-					newBox.bottomRight.x = width-5;
+					newBox.bottomRight.x = width - 5;
 				}
 				newBox.bottomRight.x = int(newBox.bottomRight.x);
-				newBox.bottomRight.y =  int(newBox.bottomRight.y);				
+				newBox.bottomRight.y = int(newBox.bottomRight.y);
 				merged.push_back(newBox);
 				// move top left box to next box
 				newTopLeft = i + 1;
@@ -158,12 +159,33 @@ std::vector<BoundingBox> CraftModel::mergeBoundingBoxes(std::vector<BoundingBox>
 	return merged;
 }
 
-std::vector<BoundingBox> CraftModel::getBoundingBoxes(const torch::Tensor &input, const torch::Tensor& output, float textThresh, float linkThresh, float lowText)
+std::vector<BoundingBox> CraftModel::getBoundingBoxes(const ov::Tensor& input, const ov::Tensor& output, float textThresh, float linkThresh, float lowText)
 {
 	std::vector<BoundingBox> detBoxes;
-	cv::Mat linkMap = this->convertToMat(output.select(2, 0).unsqueeze(0).clone(),true, true, false, false).clone();
-	cv::Mat textMap = this->convertToMat(output.select(2, 1).unsqueeze(0).clone(), true, true, false, false).clone();
-	auto tempTextMap = output.select(2, 1).unsqueeze(0).clone();
+	const ov::Shape output_shape = output.get_shape();
+	auto output_size = output.get_size();
+	float* output_data = output.data<float>();
+	std::vector<uint8_t> linkMapData = {};
+	std::vector<uint8_t> textMapData = {};
+	for (size_t i = 0; i < output_size; i+=2)
+	{	
+		float scaled_value = output_data[i] * 255.0f;
+		float cla = std::max(0.0f, std::min(255.0f, scaled_value));
+		uint8_t casted = static_cast<uint8_t>(cla);
+		linkMapData.push_back(casted);
+	}
+
+	for (size_t i = 1; i < output_size; i += 2)
+		{	
+			float scaled_value = output_data[i] * 255.0f;
+			float cla = std::max(0.0f, std::min(255.0f, scaled_value));
+			textMapData.push_back(cla);
+		}
+	const ov::Tensor linkMapTensor(ov::element::u8, { 1, output_shape[1],output_shape[2] }, linkMapData.data());
+	const ov::Tensor textMapTensor(ov::element::u8, { 1, output_shape[1],output_shape[2] }, textMapData.data());
+	const cv::Mat linkMap = convertToMat(linkMapTensor, true, true, false, false).clone();
+	const cv::Mat textMap = convertToMat(textMapTensor, true, true, false, false).clone();
+	auto tempTextMap = textMap.clone();
 	int r = linkMap.rows;
 	int c = linkMap.cols;
 	cv::Mat linkScore, textScore;
@@ -171,7 +193,7 @@ std::vector<BoundingBox> CraftModel::getBoundingBoxes(const torch::Tensor &input
 	cv::threshold(textMap, textScore, (lowText * 255), 255, 0);
 	cv::Mat outputScore = linkScore.clone() + textScore.clone();
 	cv::min(cv::max(outputScore, 0), 255, outputScore);
-	outputScore.convertTo(outputScore,CV_8UC3);
+	outputScore.convertTo(outputScore, CV_8UC3);
 	cv::Mat labels, stats, centroids;
 	std::vector<int> mapper;
 	int numLabels = cv::connectedComponentsWithStats(outputScore, labels, stats, centroids, 4, CV_32S);
@@ -184,7 +206,7 @@ std::vector<BoundingBox> CraftModel::getBoundingBoxes(const torch::Tensor &input
 		cv::Mat mask = (labels == i);
 		double minVal, maxVal;
 		cv::Point minLoc, maxLoc;
-		cv::minMaxLoc(textMap, &minVal, &maxVal, &minLoc, &maxLoc,mask);
+		cv::minMaxLoc(textMap, &minVal, &maxVal, &minLoc, &maxLoc, mask);
 		mapper.push_back(i);
 		segMap.setTo(255, labels == i);
 		cv::Mat linkMask = (linkScore == 1) & (textScore == 0);
@@ -201,7 +223,7 @@ std::vector<BoundingBox> CraftModel::getBoundingBoxes(const torch::Tensor &input
 		if (ex >= c) ex = c;
 		if (ey >= r) ey = r;
 		cv::Mat kernel = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(1 + niter, 1 + niter));
-	    	cv::dilate(segMap(cv::Range(sy, ey), cv::Range(sx, ex)), segMap(cv::Range(sy, ey), cv::Range(sx, ex)), kernel);
+		cv::dilate(segMap(cv::Range(sy, ey), cv::Range(sx, ex)), segMap(cv::Range(sy, ey), cv::Range(sx, ex)), kernel);
 		// make box
 		cv::Mat nonZeroCoords;
 		cv::findNonZero(segMap, nonZeroCoords);
@@ -213,14 +235,14 @@ std::vector<BoundingBox> CraftModel::getBoundingBoxes(const torch::Tensor &input
 		BoundingBox detection;
 		std::vector<cv::Point> points;
 		for (int i = 0; i < 4; i++)
-		{	
+		{
 			float colVal;
 			float rowVal = box.at<float>(i, 0);
 			for (int j = 0; j < 1; j++)
 			{
 				colVal = box.at<float>(i, 1);
 			}
-			cv::Point point(rowVal, colVal );
+			cv::Point point(rowVal, colVal);
 			points.push_back(point);
 		}
 		std::sort(points.begin(), points.end(), pointSorter());
@@ -246,7 +268,7 @@ std::vector<BoundingBox> CraftModel::getBoundingBoxes(const torch::Tensor &input
 			detection.topLeft.y = int(t) * 2;
 			detection.bottomRight.x = int(r) * 2;
 			detection.bottomRight.y = int(b) * 2;
-			
+
 		}
 		*/
 		detBoxes.push_back(detection);
@@ -258,7 +280,7 @@ std::vector<BoundingBox> CraftModel::getBoundingBoxes(const torch::Tensor &input
 	return detBoxes;
 }
 
-cv::Mat CraftModel::normalize(const cv::Mat &img)
+cv::Mat CraftModel::normalize(const cv::Mat& img)
 {
 	std::vector<cv::Mat> channels(3);
 	cv::Mat output;
@@ -271,24 +293,21 @@ cv::Mat CraftModel::normalize(const cv::Mat &img)
 	return output;
 }
 
-torch::Tensor CraftModel::preProcess(const cv::Mat & matInput)
+ov::Tensor CraftModel::preProcess(const cv::Mat& matInput)
 {
 	//Normalize the input using mean + std values from easyOCR
 	cv::Mat normedMatInput = this->normalize(matInput.clone()).clone();
-	//Convert final input into a torch::Tensor from a cv::Mat
-	torch::Tensor input = this->convertToTensor(normedMatInput.clone()).clone();
+	ov::Tensor input = this->convertToTensor(normedMatInput);
 	return input;
 }
 
-std::vector<BoundingBox> CraftModel::runDetector(torch::Tensor& input, bool merge)
+std::vector<BoundingBox> CraftModel::runDetector(ov::Tensor& input, bool merge)
 {
-	int height = input.size(2);
-	int width = input.size(3);
-	std::vector<torch::Tensor> detInput = { input.clone() };
-	auto output = this->predict(detInput).squeeze().detach().clone();
+	int height = input.get_shape()[1];
+	int width = input.get_shape()[2];
+	auto output = this->predict(input);
 	auto ss = std::chrono::high_resolution_clock::now();
-	auto detections = this->getBoundingBoxes(input.clone(),output.clone());
-	//custom bounding box merging
+	auto detections = this->getBoundingBoxes(input, output);
 	if (merge)
 		detections = this->mergeBoundingBoxes(detections, .97, height, width);
 	//auto ee = std::chrono::high_resolution_clock::now();
